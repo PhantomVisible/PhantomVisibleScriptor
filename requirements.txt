@@ -1,0 +1,17 @@
+# Core dependencies for Phantom Visible Scripter
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.10
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# Optional: For better HTML parsing and web scraping
+lxml>=4.9.0
+
+# Optional: For enhanced logging and debugging
+colorlog>=6.7.0
+
+# Development dependencies (uncomment if needed)
+# pytest>=7.0.0
+# black>=23.0.0
+# flake8>=6.0.0
