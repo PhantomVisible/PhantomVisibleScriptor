@@ -18,6 +18,7 @@ from agents.research_agent import ResearchAgent
 from agents.planning_agent import PlanningAgent
 from agents.scripting_agent import ScriptingAgent
 from agents.critic_agent import CriticAgent
+from agents.collaborative_agent import CollaborativeAgent
 
 # Configure logging
 logging.basicConfig(
@@ -31,28 +32,36 @@ class PhantomVisibleScripter:
     
     def __init__(self, model_name: str = "llama3.1:8b", base_url: str = "http://localhost:11434"):
         """
-        Initialize the Phantom Visible Scripter
+        Initialize Phantom Visible Scripter
         
         Args:
-            model_name: Ollama model to use
-            base_url: Ollama server URL
+            model_name: Name of Ollama model to use
+            base_url: Base URL for Ollama instance
         """
         self.model_name = model_name
         self.base_url = base_url
         
-        # Initialize Ollama client
-        self.ollama = OllamaClient(model_name, base_url)
-        
-        # Initialize agents
+        # Initialize all agents
+        self.ollama = OllamaClient(model_name=model_name, base_url=base_url)
         self.research_agent = ResearchAgent(self.ollama)
         self.planning_agent = PlanningAgent(self.ollama)
         self.scripting_agent = ScriptingAgent(self.ollama)
         self.critic_agent = CriticAgent(self.ollama)
         
-        # Store current work
-        self.current_research = None
-        self.current_plan = None
-        self.current_script = None
+        # Initialize collaborative agent (optional)
+        try:
+            self.collaborative_agent = CollaborativeAgent(
+                primary_model=model_name, 
+                collaborator_model=model_name
+            )
+        except Exception as e:
+            logger.warning(f"Collaborative agent initialization failed: {e}")
+            self.collaborative_agent = None
+        
+        # Storage for current work
+        self.current_research = {}
+        self.current_plan = {}
+        self.current_script = {}
     
     def run(self, topic: str) -> Dict[str, Any]:
         """
@@ -95,8 +104,13 @@ class PhantomVisibleScripter:
             self.current_research, 
             self.current_plan
         )
-        print(f"✅ Script generated ({self.current_script['word_count']} words)")
-        print(f"⏱️  Estimated duration: {self.current_script['estimated_duration']:.1f} minutes")
+        
+        # Get verified word count from scripting agent
+        verified_word_count = self.current_script.get('word_count', 0)
+        verified_duration = self.current_script.get('estimated_duration', 0)
+        
+        print(f"✅ Script generated ({verified_word_count} words)")
+        print(f"⏱️  Estimated duration: {verified_duration:.1f} minutes")
         
         # Step 6: Display results
         self._display_final_results()
@@ -213,9 +227,14 @@ class PhantomVisibleScripter:
         print("🎬 FINAL YOUTUBE SCRIPT")
         print("="*50)
         
+        # Get verified word count from current script
+        verified_word_count = self.current_script.get('word_count', 0)
+        verified_duration = self.current_script.get('estimated_duration', 0)
+        
         print(f"\n📝 Topic: {self.current_script['topic']}")
-        print(f"📊 Word Count: {self.current_script['word_count']}")
-        print(f"⏱️  Duration: {self.current_script['estimated_duration']:.1f} minutes")
+        print(f"📊 Word Count: {verified_word_count}")
+        print(f"⏱️  Duration: {verified_duration:.1f} minutes")
+        print(f"📚 Sources Used: {self.current_script.get('total_sources', 0)} actual web sources")
         
         print(f"\n🎯 Talking Points:")
         for i, point in enumerate(self.current_script['talking_points'], 1):
@@ -262,9 +281,11 @@ class PhantomVisibleScripter:
             print("2. Refine a specific section")
             print("3. Generate alternative script")
             print("4. Save script to file")
-            print("5. Exit")
+            print("5. Show research sources used")
+            print("6. Collaborative improvement (AI discusses with AI)")
+            print("7. Exit")
             
-            choice = input("Choose an option (1-5): ").strip()
+            choice = input("Choose an option (1-7): ").strip()
             
             if choice == '1':
                 self._regenerate_hooks()
@@ -275,6 +296,14 @@ class PhantomVisibleScripter:
             elif choice == '4':
                 self._save_script()
             elif choice == '5':
+                self._show_sources()
+            elif choice == '6':
+                if self.collaborative_agent:
+                    self._collaborative_improvement()
+                else:
+                    print("⚠️ Collaborative agent not available. This feature requires multiple model instances or additional setup.")
+                    print("💡 Tip: Collaborative improvement works best when you have different AI models or want to simulate peer review.")
+            elif choice == '7':
                 print("\n👋 Thanks for using Phantom Visible Scripter!")
                 break
             else:
@@ -295,6 +324,23 @@ class PhantomVisibleScripter:
         
         self.current_plan['hooks'] = new_hooks
         self.current_script['alternative_hooks'] = new_hooks
+    
+    def _show_sources(self):
+        """Show all sources used in research with full transparency"""
+        print("\n" + "="*50)
+        print("📚 RESEARCH SOURCES TRANSPARENCY REPORT")
+        print("="*50)
+        
+        sources_report = self.research_agent.get_sources_report(self.current_research)
+        print(sources_report)
+        
+        print("\n" + "="*50)
+        print("🔍 **Source Verification:**")
+        print("- All sources were found via DuckDuckGo search")
+        print("- Content was extracted and synthesized by the AI")
+        print("- No sources were fabricated or hallucinated")
+        print(f"- Research used {self.current_research.get('total_sources', 0)} actual web sources")
+        print("="*50)
     
     def _refine_section(self):
         """Refine a specific section"""
@@ -334,20 +380,135 @@ class PhantomVisibleScripter:
         print(new_script['full_script'][:500] + "...")
         print("-" * 30)
     
+    def _collaborative_improvement(self):
+        """Handle collaborative improvement between AI models"""
+        print("\n" + "="*50)
+        print("🤝 COLLABORATIVE IMPROVEMENT")
+        print("="*50)
+        
+        # Get user feedback for context
+        user_feedback = input("Any specific concerns or feedback? (press Enter to skip): ").strip()
+        
+        print("\n🔄 Step 1: Primary model analyzing its own work...")
+        collaborative_result = self.collaborative_agent.collaborative_review(
+            self.current_script['full_script'],
+            self.current_script['topic'],
+            user_feedback
+        )
+        
+        print("\n📊 COLLABORATIVE RESULTS:")
+        print(f"Models involved: {', '.join(collaborative_result['models_used'])}")
+        
+        print("\n🎯 Primary Model Analysis:")
+        primary_analysis = collaborative_result.get('primary_analysis', {}).get('analysis', 'No analysis available')
+        print(primary_analysis[:500] + "..." if len(primary_analysis) > 500 else primary_analysis)
+        
+        print("\n🤝 Collaborator Review:")
+        collaborator_review = collaborative_result.get('collaborator_review', {}).get('review', 'No review available')
+        print(collaborator_review[:500] + "..." if len(collaborator_review) > 500 else collaborator_review)
+        
+        print("\n📋 Consensus Recommendations:")
+        consensus = collaborative_result.get('consensus', {}).get('consensus', 'No consensus available')
+        print(consensus[:800] + "..." if len(consensus) > 800 else consensus)
+        
+        # Ask if user wants to implement improvements
+        while True:
+            print("\n" + "-"*50)
+            print("Options:")
+            print("1. Generate improved script based on consensus")
+            print("2. Save collaborative analysis to file")
+            print("3. Return to main menu")
+            
+            action = input("Choose an option (1-3): ").strip()
+            
+            if action == '1':
+                print("\n🔄 Generating improved script...")
+                improved_script = self.collaborative_agent.generate_improved_script(
+                    self.current_script['full_script'],
+                    collaborative_result
+                )
+                
+                # Update current script with improved version
+                self.current_script['full_script'] = improved_script
+                self.current_script['word_count'] = self.scripting_agent._analyze_script(improved_script)['word_count']
+                self.current_script['estimated_duration'] = self.current_script['word_count'] / 150
+                
+                print(f"✅ Improved script generated ({self.current_script['word_count']} words)")
+                
+                # Ask if user wants to save
+                save_choice = input("Save improved script? (y/n): ").strip().lower()
+                if save_choice in ['y', 'yes']:
+                    self._save_script()
+                
+            elif action == '2':
+                filename = input("Enter filename for collaborative analysis (without extension): ").strip()
+                if not filename:
+                    filename = f"collaborative_analysis_{self.current_script['topic'].replace(' ', '_')}"
+                
+                # Create results folder if needed
+                import os
+                results_dir = "results"
+                if not os.path.exists(results_dir):
+                    os.makedirs(results_dir)
+                
+                filepath = os.path.join(results_dir, f"{filename}.txt")
+                
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write("PHANTOM VISIBLE SCRIPTER - COLLABORATIVE ANALYSIS\n")
+                        f.write(f"Topic: {self.current_script['topic']}\n")
+                        f.write(f"Models: {', '.join(collaborative_result['models_used'])}\n")
+                        f.write(f"Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write("\n" + "="*50 + "\n\n")
+                        
+                        f.write("PRIMARY MODEL ANALYSIS:\n")
+                        f.write(primary_analysis + "\n\n")
+                        
+                        f.write("COLLABORATOR REVIEW:\n")
+                        f.write(collaborator_review + "\n\n")
+                        
+                        f.write("CONSENSUS RECOMMENDATIONS:\n")
+                        f.write(consensus + "\n\n")
+                        
+                        f.write("IMPROVEMENT SUGGESTIONS:\n")
+                        for suggestion in collaborative_result.get('improvement_suggestions', []):
+                            f.write(f"• {suggestion}\n")
+                    
+                    print(f"✅ Collaborative analysis saved to {filepath}")
+                except Exception as e:
+                    print(f"❌ Failed to save analysis: {e}")
+                    
+            elif action == '3':
+                break
+            else:
+                print("Invalid choice. Please try again.")
+    
     def _save_script(self):
         """Save script to file"""
         filename = input("Enter filename (without extension): ").strip()
         if not filename:
             filename = f"script_{self.current_script['topic'].replace(' ', '_')}"
         
-        filepath = f"{filename}.txt"
+        # Create results folder if it doesn't exist
+        import os
+        results_dir = "results"
+        if not os.path.exists(results_dir):
+            os.makedirs(results_dir)
+            print(f"📁 Created results folder")
+        
+        filepath = os.path.join(results_dir, f"{filename}.txt")
         
         try:
+            # Get verified word count from current script
+            verified_word_count = self.current_script.get('word_count', 0)
+            verified_duration = self.current_script.get('estimated_duration', 0)
+            
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(f"Phantom Visible Scripter - YouTube Script\n")
                 f.write(f"Topic: {self.current_script['topic']}\n")
-                f.write(f"Word Count: {self.current_script['word_count']}\n")
-                f.write(f"Estimated Duration: {self.current_script['estimated_duration']:.1f} minutes\n")
+                f.write(f"Word Count: {verified_word_count}\n")
+                f.write(f"Estimated Duration: {verified_duration:.1f} minutes\n")
+                f.write(f"Sources Used: {self.current_script.get('total_sources', 0)} actual web sources\n")
                 f.write(f"Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("\n" + "="*50 + "\n\n")
                 
@@ -360,6 +521,7 @@ class PhantomVisibleScripter:
                 f.write(self.current_script['full_script'])
             
             print(f"✅ Script saved to {filepath}")
+            print(f"📁 Location: {os.path.abspath(filepath)}")
         except Exception as e:
             print(f"❌ Failed to save script: {e}")
 

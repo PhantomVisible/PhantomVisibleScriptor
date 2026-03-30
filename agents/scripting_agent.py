@@ -30,9 +30,12 @@ class ScriptingAgent:
             content_plan: Structured content plan from PlanningAgent
             
         Returns:
-            Complete script with metadata
+            Complete script with metadata including sources used
         """
         logger.info(f"Generating script for topic: {research_data['topic']}")
+        
+        # Store research sources for transparency
+        sources_used = research_data.get('sources', [])
         
         # Generate the full script
         full_script = self._generate_full_script(research_data, content_plan)
@@ -54,7 +57,9 @@ class ScriptingAgent:
             "alternative_hooks": alternative_hooks,
             "talking_points": talking_points,
             "target_duration": content_plan.get('estimated_length', 12),
-            "target_word_count": content_plan.get('target_word_count', 1800)
+            "target_word_count": content_plan.get('target_word_count', 2200),
+            "sources_used": sources_used,  # Track sources for transparency
+            "total_sources": len(sources_used)
         }
     
     def refine_section(self, original_script: str, section_description: str, feedback: str) -> str:
@@ -153,38 +158,58 @@ Please provide 5 new hooks as a numbered list:
         
         system_prompt = """You are a professional YouTube script writer who creates engaging, motivational content.
 Your scripts are conversational, authentic, and provide real value to viewers.
-You avoid cringe phrases, clickbait, and overly salesy language."""
+You avoid cringe phrases, clickbait, and overly salesy language.
+You MUST write a substantial script that meets the word count target - no shortcuts."""
 
-        # Prepare comprehensive context
+        # Prepare comprehensive context with better research integration
         hooks = content_plan.get('hooks', [])
         sections = content_plan.get('sections', [])
         narrative_flow = content_plan.get('narrative_flow', [])
         key_insights = research_data.get('key_insights', {})
+        research_summary = research_data.get('research_summary', '')
+        sources_used = research_data.get('sources', [])
         
+        # Extract specific research details for authenticity
+        main_points = key_insights.get('main_points', [])
+        examples = key_insights.get('examples', [])
+        statistics = key_insights.get('statistics', [])
+        
+        # Build section summary with more detail
+        section_summary = ""
+        for i, section in enumerate(sections, 1):
+            section_summary += f"""
+Section {i}: {section['title']} ({section['duration']} min)
+Purpose: {section['purpose']}
+Key Points: {', '.join(section.get('key_points', []))}
+"""
+        
+        # Create enhanced context with real research integration
         context = f"""
 TOPIC: {research_data['topic']}
 
-TARGET: 10-15 minute video (~{content_plan.get('target_word_count', 1800)} words)
+TARGET: 10-15 minute video (~{content_plan.get('target_word_count', 2200)} words)
+CRITICAL: You MUST write at least {content_plan.get('target_word_count', 2200)} words. Do not stop early.
+WARNING: Your word count will be verified after generation. Short scripts will be rejected.
 
-RESEARCH INSIGHTS:
-Main Points: {', '.join(key_insights.get('main_points', []))}
-Examples: {', '.join(key_insights.get('examples', []))}
-Statistics: {', '.join(key_insights.get('statistics', []))}
+RESEARCH INSIGHTS (Use these in your script):
+Main Points: {', '.join(main_points) if main_points else 'No specific main points found'}
+Examples: {', '.join(examples) if examples else 'No specific examples found'}
+Statistics: {', '.join(statistics) if statistics else 'No specific statistics found'}
+
+DETAILED RESEARCH:
+{research_summary}
+
+SOURCES USED ({len(sources_used)} total):
+{chr(10).join([f"- {source.get('title', 'Unknown')}: {source.get('url', 'No URL')}" for source in sources_used[:3]])}
 
 CONTENT STRUCTURE:
 Hook Options: {', '.join(hooks[:3])}
 
 Sections:
-{chr(10).join(f"{i+1}. {section.get('title', 'Untitled')} - {section.get('purpose', '')}" for i, section in enumerate(sections))}
+{section_summary}
 
-Narrative Flow:
-{chr(10).join(f"{i+1}. {step}" for i, step in enumerate(narrative_flow[:5]))}
-"""
-        
-        prompt = f"""
-Write a complete YouTube script about "{research_data['topic']}" using the following context:
-
-{context}
+NARRATIVE FLOW:
+{chr(10).join(narrative_flow)}
 
 REQUIREMENTS:
 1. Start with the strongest hook from the options
@@ -195,8 +220,10 @@ REQUIREMENTS:
 6. Write for speaking (natural language, not formal writing)
 7. Include smooth transitions between sections
 8. End with a strong call-to-action and conclusion
-9. Target word count: {content_plan.get('target_word_count', 1800)} words
+9. CRITICAL: Write at least {content_plan.get('target_word_count', 2200)} words - NO SHORTCUTS
 10. Avoid clichés and cringe phrases
+11. Actually use the research provided - don't just mention it exists
+12. Word count will be verified - short scripts will be rejected
 
 Format the script clearly with:
 [HOOK] - Opening hook
@@ -209,21 +236,82 @@ Write the complete script now:
 """
         
         try:
-            return self.ollama.generate_response(prompt, system_prompt)
+            response = self.ollama.generate_response(context, system_prompt)
+            
+            # Verify word count immediately after generation
+            actual_word_count = self._analyze_script(response)['word_count']
+            target_word_count = content_plan.get('target_word_count', 2200)
+            
+            logger.info(f"Generated script: {actual_word_count} words (target: {target_word_count})")
+            
+            if actual_word_count < target_word_count * 0.8:  # Allow 80% of target
+                logger.error(f"SCRIPT TOO SHORT: {actual_word_count} vs target {target_word_count}")
+                # Add instruction to extend the script
+                extension_prompt = f"""
+CRITICAL: Your script is too short ({actual_word_count} words vs target {target_word_count} words).
+This is unacceptable. You MUST extend it by adding more detail, examples, and depth to reach at least {target_word_count} words.
+
+Current script:
+{response}
+
+REQUIREMENTS FOR EXTENSION:
+1. Add more detailed examples
+2. Include specific statistics from research
+3. Expand each section with more depth
+4. Add personal anecdotes or stories
+5. Include more transitions between ideas
+6. Reach EXACTLY {target_word_count} words minimum
+
+Please extend the script to meet the word count requirement:
+"""
+                extended_response = self.ollama.generate_response(extension_prompt, system_prompt)
+                
+                # Verify the extended script
+                extended_word_count = self._analyze_script(extended_response)['word_count']
+                logger.info(f"Extended script: {extended_word_count} words (target: {target_word_count})")
+                
+                if extended_word_count >= target_word_count * 0.8:
+                    return extended_response
+                else:
+                    logger.error(f"EXTENSION FAILED: {extended_word_count} words - still too short")
+                    return f"Failed to generate sufficient script length. Got {extended_word_count} words, needed {target_word_count}."
+            else:
+                return response
         except Exception as e:
             logger.error(f"Failed to generate full script: {e}")
             return "Failed to generate script. Please try again."
     
     def _analyze_script(self, script: str) -> Dict[str, Any]:
         """Analyze script statistics"""
-        word_count = len(script.split())
+        import re
+        
+        # Clean script and count words more accurately
+        # Remove script markers and formatting
+        clean_script = re.sub(r'\[.*?\]', '', script)  # Remove [HOOK], [TRANSITION], etc.
+        clean_script = re.sub(r'\*\*.*?\*\*', '', clean_script)  # Remove bold formatting
+        clean_script = re.sub(r'\*.*?\*', '', clean_script)  # Remove italic formatting
+        clean_script = re.sub(r'---.*?---', '', clean_script)  # Remove separators
+        
+        # Count words using improved regex
+        words = re.findall(r'\b[a-zA-Z]+\b', clean_script)
+        word_count = len(words)
         estimated_duration = word_count / 150  # ~150 words per minute
+        
+        # Log actual word count for verification
+        logger.info(f"Script analysis: {word_count} words, {estimated_duration:.1f} minutes")
+        
+        # Additional verification
+        if word_count < 1000:
+            logger.warning(f"Script appears short: {word_count} words")
+        elif word_count > 5000:
+            logger.warning(f"Script appears very long: {word_count} words")
         
         return {
             "word_count": word_count,
             "estimated_duration": estimated_duration,
             "character_count": len(script),
-            "paragraph_count": len([p for p in script.split('\n\n') if p.strip()])
+            "paragraph_count": len([p for p in script.split('\n\n') if p.strip()]),
+            "clean_word_count": word_count  # Track cleaned word count
         }
     
     def _generate_alternative_hooks(self, content_plan: Dict[str, Any]) -> List[str]:

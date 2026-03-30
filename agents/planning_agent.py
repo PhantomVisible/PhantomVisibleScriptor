@@ -155,10 +155,62 @@ Duration: [X] minutes
         
         try:
             response = self.ollama.generate_response(prompt, system_prompt)
-            return self._parse_sections(response)
+            parsed_sections = self._parse_sections(response)
+            
+            # If no sections were parsed, create default sections
+            if not parsed_sections:
+                logger.warning("No sections parsed, creating default sections")
+                parsed_sections = self._create_default_sections(research_data['topic'])
+            
+            return parsed_sections
         except Exception as e:
             logger.error(f"Failed to create sections: {e}")
-            return []
+            return self._create_default_sections(research_data['topic'])
+    
+    def _create_default_sections(self, topic: str) -> List[Dict[str, Any]]:
+        """Create default sections for any topic"""
+        return [
+            {
+                'title': 'Introduction & Problem Setup',
+                'purpose': 'Introduce the core problem and why it matters',
+                'key_points': [
+                    'Define the main challenge',
+                    'Explain why viewers should care',
+                    'Set up the video premise'
+                ],
+                'duration': 3
+            },
+            {
+                'title': 'The Core Concept',
+                'purpose': 'Explain the main theory or framework',
+                'key_points': [
+                    'Introduce the key concept',
+                    'Provide context and background',
+                    'Use relatable examples'
+                ],
+                'duration': 4
+            },
+            {
+                'title': 'Practical Application',
+                'purpose': 'Show how to apply the concept in real life',
+                'key_points': [
+                    'Provide actionable steps',
+                    'Share real-world examples',
+                    'Address common obstacles'
+                ],
+                'duration': 4
+            },
+            {
+                'title': 'Conclusion & Call to Action',
+                'purpose': 'Summarize key points and motivate action',
+                'key_points': [
+                    'Recap main takeaways',
+                    'Provide clear next steps',
+                    'End with motivational message'
+                ],
+                'duration': 2
+            }
+        ]
     
     def _design_narrative_flow(self, research_data: Dict[str, Any], hooks: List[str], sections: List[Dict]) -> List[str]:
         """Design the overall narrative flow of the video"""
@@ -205,12 +257,12 @@ Format as a numbered list of narrative steps:
     def _estimate_video_structure(self, narrative_flow: List[str]) -> Dict[str, Any]:
         """Estimate video structure and metrics"""
         
-        # Basic estimation based on sections count
-        section_count = len([step for step in narrative_flow if 'section' in step.lower()])
+        # Use a fixed minimum section count for better video structure
+        section_count = 4  # Minimum 4 sections for good video structure
         
         # Estimate durations
         intro_duration = 1.5  # minutes
-        section_duration = 2.5  # minutes per section
+        section_duration = 4.0  # minutes per section (increased for longer scripts)
         outro_duration = 1.0  # minutes
         
         estimated_duration = intro_duration + (section_count * section_duration) + outro_duration

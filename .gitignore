@@ -142,6 +142,7 @@ langchain-env/
 training_data/
 previous_work/
 debug_test.py
+results/
 
 # Logs
 *.log

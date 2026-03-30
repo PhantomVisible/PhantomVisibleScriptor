@@ -145,6 +145,31 @@ PhantomVisibleScriptor/
 - Generate alternative scripts
 - Save final script to file
 
+## 🔧 Refinement Options
+
+After script generation, you can refine your content through multiple options:
+
+1. **Regenerate Hooks**: Create new opening hooks based on feedback
+2. **Refine Specific Section**: Improve particular sections of the script
+3. **Generate Alternative Script**: Create a completely new version
+4. **Save Script**: Export your script to a text file
+5. **Show Research Sources**: View all sources used in research
+6. **Collaborative Improvement** 🆕: AI discusses with AI to improve the script *(Optional)*
+7. **Exit**: Leave the application
+
+#### **Collaborative Improvement Process:**
+
+When you choose option 6, the system initiates a unique multi-model collaboration:
+
+1. **Self-Analysis**: The primary model analyzes its own work honestly
+2. **Peer Review**: A second AI model reviews the script and analysis
+3. **Consensus Building**: Models discuss and reach agreement on improvements
+4. **Implementation**: Generate improved version based on collaborative recommendations
+
+**Note**: This feature is optional and gracefully handles cases where collaborative agent initialization fails. You can still use all other features normally!
+
+This feature ensures multiple AI perspectives lead to better, more refined scripts!
+
 ## 🎯 Script Characteristics
 
 - **Length**: 10-15 minutes (1500-2500 words)
