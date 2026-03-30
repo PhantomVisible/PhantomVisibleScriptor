@@ -22,7 +22,7 @@ A local-first autonomous AI agent that researches topics and creates engaging Yo
 
 2. **Pull LLaMA 3 model**:
    ```bash
-   ollama pull llama3
+   ollama pull llama3.1:8b
    ```
 
 3. **Start Ollama server**:
@@ -43,6 +43,15 @@ A local-first autonomous AI agent that researches topics and creates engaging Yo
    pip install -r requirements.txt
    ```
 
+3. Create activation shortcut (optional):
+   ```bash
+   # Add this to your ~/.bashrc or ~/.zshrc for quick activation
+   alias activate-pvs="cd /home/phantomvisible/Documents/GitHub/PhantomVisibleScriptor && source langchain-env/bin/activate"
+   
+   # Then simply run:
+   activate-pvs
+   ```
+
 ### Usage
 
 #### Basic Usage
@@ -55,7 +64,7 @@ python main.py "your youtube topic here"
 
 ```bash
 # Use different model
-python main.py "productivity tips" --model llama3
+python main.py "productivity tips" --model llama3.1:8b
 
 # Custom Ollama server
 python main.py "machine learning basics" --url http://localhost:11435
@@ -149,7 +158,7 @@ PhantomVisibleScriptor/
 ### Ollama Settings
 
 Default configuration in `utils/ollama_client.py`:
-- Model: `llama3`
+- Model: `llama3.1:8b`
 - URL: `http://localhost:11434`
 - Temperature: `0.7`
 - Top P: `0.9`
@@ -200,7 +209,7 @@ ollama list
 ollama serve
 
 # Check model availability
-ollama show llama3
+ollama show llama3.1:8b
 ```
 
 ### Search Issues
@@ -224,7 +233,7 @@ python main.py "the benefits of morning routines"
 
 ### With Custom Model
 ```bash
-python main.py "artificial intelligence ethics" --model llama3:70b
+python main.py "artificial intelligence ethics" --model llama3.1:8b
 ```
 
 ### Development Mode
